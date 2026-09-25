@@ -1,5 +1,9 @@
 import streamlit as st
 
-st.title("Project Information")
+st.title("About ReservoirScope")
 
-st.write("Additional information about the IND320 project.")
+st.write(
+    """
+    ReservoirScope is developed as part of the IND320 Data to Decision course.
+    """
+)
