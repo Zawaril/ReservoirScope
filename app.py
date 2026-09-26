@@ -1,12 +1,14 @@
 import streamlit as st
 
+# Configure Streamlit Page
 st.set_page_config(
     page_title="ReservoirScope",
-    page_icon="💧",
     layout="wide"
 )
 
-st.title("💧 ReservoirScope")
+# Main Page Title
+st.title("ReservoirScope")
+
 st.subheader("Interactive Reservoir Data Analytics Dashboard")
 
 st.write(
@@ -18,3 +20,6 @@ st.write(
     of the application.
     """
 )
+
+st.markdown("### IND320 - Data to Decision")
+st.write("Compulsory Project Work - Part 1")
