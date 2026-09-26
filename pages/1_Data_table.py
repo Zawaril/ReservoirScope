@@ -37,6 +37,46 @@ def load_data():
     # changing date column dtype to datetime
     reservoirs_df["date"] = pd.to_datetime(reservoirs_df["date"])
     
+    # Extract minimum date from "date" column
+    first_date = reservoirs_df["date"].min()
+    
+    first_month = reservoirs_df[
+        (reservoirs_df["date"].dt.year == first_date.year)
+        & (reservoirs_df["date"].dt.month == first_date.month)
+    ]
+    
+    # Extracting numeric columns
+    numeric_columns = 
+    [
+    "fill_level",
+    "capacity_TWh",
+    "stored_energy_TWh",
+    "previous_week_fill_level",
+    "change_in_fill_level",
+    ]
+    
+    table_data = pd.DataFrame
+    (
+        {
+            "Variable": numeric_columns,
+            "First Month": [
+                first_month[column].tolist()
+                for column in numeric_columns
+                ]
+            }
+        )
+    st.dataframe(
+        table_data,
+        column_config={
+            "First Month": st.column_config.LineChartColumn(
+                "First Month"
+            )
+        },
+        hide_index = True,
+        use_container_width= True
+    )
+    
+    
     return reservoirs_df
 
 reservoirs_df = load_data()
