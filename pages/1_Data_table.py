@@ -6,19 +6,20 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Path to reservoirs.csv in the project root
-DATA_PATH = BASE_DIR/"reservoirs.csv"
+DATA_PATH = BASE_DIR / "reservoirs.csv"
 
 st.title("Reservoir Data")
 
+
 @st.cache_data
 def load_data():
-    "Load the local reservoir CSV file."
-    
+    """Load and prepare the local reservoir CSV file."""
+
     reservoirs_df = pd.read_csv(DATA_PATH)
-    
-    # renaming columns
+
+    # Rename original Norwegian column names to clear English names.
     reservoirs_df = reservoirs_df.rename(
-        columns = {
+        columns={
             "dato_Id": "date",
             "omrType": "area_type",
             "omrnr": "area_number",
@@ -30,56 +31,86 @@ def load_data():
             "neste_Publiseringsdato": "next_publication_date",
             "fyllingsgrad_forrige_uke": "previous_week_fill_level",
             "endring_fyllingsgrad": "change_in_fill_level",
-            
         }
     )
-    
-    # changing date column dtype to datetime
-    reservoirs_df["date"] = pd.to_datetime(reservoirs_df["date"])
-    
-    # Extract minimum date from "date" column
-    first_date = reservoirs_df["date"].min()
-    
-    first_month = reservoirs_df[
-        (reservoirs_df["date"].dt.year == first_date.year)
-        & (reservoirs_df["date"].dt.month == first_date.month)
-    ]
-    
-    # Extracting numeric columns
-    numeric_columns = 
-    [
+
+    # Convert date columns to datetime.
+    reservoirs_df["date"] = pd.to_datetime(
+        reservoirs_df["date"]
+    )
+
+    reservoirs_df["next_publication_date"] = pd.to_datetime(
+        reservoirs_df["next_publication_date"]
+    )
+
+    return reservoirs_df
+
+
+# Load the prepared dataset.
+reservoirs_df = load_data()
+
+st.subheader("Imported Reservoir Dataset")
+
+st.write(
+    "Preview of the imported reservoir dataset after basic preprocessing."
+)
+
+st.dataframe(
+    reservoirs_df.head(),
+    use_container_width=True
+)
+
+
+# Find the earliest date in the dataset.
+first_date = reservoirs_df["date"].min()
+
+# Filter observations belonging to the first calendar month in the dataset.
+first_month = reservoirs_df[
+    (reservoirs_df["date"].dt.year == first_date.year)
+    & (reservoirs_df["date"].dt.month == first_date.month)
+]
+
+
+# Continuous reservoir measurement columns.
+numeric_columns = [
     "fill_level",
     "capacity_TWh",
     "stored_energy_TWh",
     "previous_week_fill_level",
     "change_in_fill_level",
-    ]
-    
-    table_data = pd.DataFrame
-    (
-        {
-            "Variable": numeric_columns,
-            "First Month": [
-                first_month[column].tolist()
-                for column in numeric_columns
-                ]
-            }
+]
+
+
+# Create one row for each measurement variable.
+# The second column stores the values observed during the first month.
+table_data = pd.DataFrame(
+    {
+        "Variable": numeric_columns,
+        "First Month": [
+            first_month[column].tolist()
+            for column in numeric_columns
+        ],
+    }
+)
+
+
+st.subheader("First-Month Reservoir Series")
+
+st.write(
+    """
+    The table below shows the reservoir measurement variables.
+    Each sparkline represents the values observed during the first
+    month available in the dataset.
+    """
+)
+
+st.dataframe(
+    table_data,
+    column_config={
+        "First Month": st.column_config.LineChartColumn(
+            "First Month"
         )
-    st.dataframe(
-        table_data,
-        column_config={
-            "First Month": st.column_config.LineChartColumn(
-                "First Month"
-            )
-        },
-        hide_index = True,
-        use_container_width= True
-    )
-    
-    
-    return reservoirs_df
-
-reservoirs_df = load_data()
-
-st.write("The imported reservoir dataset (after preprocessing):")
-st.dataframe(reservoirs_df.head())
+    },
+    hide_index=True,
+    use_container_width=True
+)
