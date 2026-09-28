@@ -12,6 +12,7 @@ st.write(
     """
 )
 
+
 st.header("Project Objective")
 
 st.write(
@@ -24,6 +25,7 @@ st.write(
     """
 )
 
+
 st.header("Features")
 
 st.markdown(
@@ -34,10 +36,13 @@ st.markdown(
     - Display first-month data series using Streamlit line-chart columns
     - Select individual reservoir variables using a drop-down menu
     - Filter observations by month range
-    - Compare multiple reservoir variables using normalised visualisation
+    - Visualise national reservoir measurements over time
+    - Compare multiple reservoir variables using Min-Max normalisation
+    - Handle constant variables during normalisation
     - Cache data loading for improved application performance
     """
 )
+
 
 st.header("Technologies Used")
 
@@ -52,18 +57,52 @@ st.markdown(
     """
 )
 
+
 st.header("Dataset")
 
 st.write(
     """
-    The application uses the `reservoirs.csv` dataset provided for the
+    The application uses the reservoirs.csv dataset provided for the
     IND320 project.
 
-    The dataset contains time-based reservoir measurements, including
-    fill level, storage capacity, stored energy, previous-week fill level,
-    and changes in fill level.
+    The dataset contains reservoir observations from different geographical
+    areas, including fill level, storage capacity, stored energy,
+    previous-week fill level, and changes in fill level.
+
+    The Reservoir Data page displays the imported dataset and first-month
+    measurements from the available geographical areas.
+
+    The Reservoir Visualisation page uses national reservoir observations
+    to explore changes over time.
     """
 )
+
+
+st.header("Data Processing")
+
+st.write(
+    """
+    The reservoir dataset is loaded using Pandas and cached using
+    Streamlit to improve application performance.
+
+    The original Norwegian column names are translated into English,
+    and the observation dates are converted into datetime format.
+
+    For the interactive visualisation, national reservoir observations
+    are selected and organised chronologically.
+
+    The selected measurements are grouped by observation date to
+    obtain one value per date.
+
+    When all measurement variables are displayed together,
+    Min-Max normalisation is applied to make variables with
+    different numerical scales easier to compare.
+
+    Variables with constant values are assigned a normalised
+    value of 0.5 for visualisation purposes.
+    """
+)
+
 
 st.header("Application Structure")
 
@@ -72,11 +111,12 @@ st.markdown(
     ReservoirScope currently contains four pages:
 
     1. **Home** – introduction to the project
-    2. **Reservoir Data** – dataset preview and first-month data series
+    2. **Reservoir Data** – imported dataset and first-month data series
     3. **Reservoir Visualisation** – interactive time-series exploration
     4. **Project Information** – project overview and documentation
     """
 )
+
 
 st.header("Project Repository")
 

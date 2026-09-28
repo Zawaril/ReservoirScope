@@ -43,32 +43,52 @@ def load_data():
         reservoirs_df["next_publication_date"]
     )
 
+    # Sort the dataset by date.
+    reservoirs_df = reservoirs_df.sort_values("date")
+
     return reservoirs_df
 
 
 # Load the prepared dataset.
 reservoirs_df = load_data()
 
+
 st.subheader("Imported Reservoir Dataset")
 
 st.write(
-    "Preview of the imported reservoir dataset after basic preprocessing."
+    "The imported reservoir dataset after basic preprocessing."
 )
 
 st.dataframe(
-    reservoirs_df.head(),
-    use_container_width=True
+    reservoirs_df,
+    use_container_width=True,
+    hide_index=True
 )
 
 
 # Find the earliest date in the dataset.
 first_date = reservoirs_df["date"].min()
 
-# Filter observations belonging to the first calendar month in the dataset.
+# Filter observations belonging to the first calendar month.
 first_month = reservoirs_df[
     (reservoirs_df["date"].dt.year == first_date.year)
     & (reservoirs_df["date"].dt.month == first_date.month)
-]
+].sort_values("date")
+
+
+# Display all observations from the first month.
+st.subheader("Data from the First Month")
+
+st.write(
+    "The table below shows all observations recorded during "
+    "the first month available in the dataset."
+)
+
+st.dataframe(
+    first_month,
+    use_container_width=True,
+    hide_index=True
+)
 
 
 # Continuous reservoir measurement columns.
@@ -94,21 +114,31 @@ table_data = pd.DataFrame(
 )
 
 
-st.subheader("First-Month Reservoir Series")
+st.subheader("Reservoir Measurements During the First Month")
 
 st.write(
     """
     The table below shows the reservoir measurement variables.
-    Each sparkline represents the values observed during the first
-    month available in the dataset.
+    Each sparkline represents the values observed during the
+    first month available in the dataset.
     """
 )
 
+
+
+# Display the first-month measurements using line charts.
 st.dataframe(
     table_data,
     column_config={
+        "Variable": st.column_config.TextColumn(
+            "Variable",
+            width="medium"
+        ),
+
         "First Month": st.column_config.LineChartColumn(
-            "First Month"
+            "First Month",
+            width="large",
+            color="#C46A42"
         )
     },
     hide_index=True,

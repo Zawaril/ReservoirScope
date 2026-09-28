@@ -103,9 +103,15 @@ filtered_df = reservoirs_df[
 ]
 
 
-# The dataset contains several geographical observations
-# for the same date. Calculate the mean for each date to
-# obtain one time-series value per measurement.
+# Select the national reservoir data.
+filtered_df = filtered_df[
+    (filtered_df["area_type"] == "NO")
+    & (filtered_df["area_number"] == 0)
+]
+
+
+# Calculate the mean for each date to obtain
+# one time-series value per measurement.
 date_mean = (
     filtered_df
     .groupby("date")[measurement_columns]
@@ -120,18 +126,29 @@ fig, ax = plt.subplots(figsize=(12, 6))
 
 if selected_column == "All Columns":
 
-    # Normalize each variable to the range 0–1 so variables
-    # with different units and scales can be compared fairly.
+    # Normalize the measurements to the range 0–1.
     normalized_data = (
         (date_mean - date_mean.min())
-        / (date_mean.max() - date_mean.min())
+        / (date_mean.max() - date_mean.min()).replace(0, float("nan"))
     )
 
-    for column in measurement_columns:
+    # Assign 0.5 to variables with constant values.
+    normalized_data = normalized_data.fillna(0.5)
+
+    # Use different line styles and markers to distinguish overlapping lines.
+    line_styles = ["-", "--", "-.", ":", "-"]
+    markers = ["o", "s", "^", "D", "x"]
+
+    for i, column in enumerate(measurement_columns):
         ax.plot(
             normalized_data.index,
             normalized_data[column],
-            label=column.replace("_", " ").title()
+            label=column.replace("_", " ").title(),
+            linestyle=line_styles[i],
+            marker=markers[i],
+            markersize=5,
+            linewidth=2,
+            alpha=0.8
         )
 
     ax.set_title("Normalized Reservoir Measurements")
@@ -144,7 +161,10 @@ else:
     ax.plot(
         date_mean.index,
         date_mean[selected_column],
-        label=selected_column.replace("_", " ").title()
+        label=selected_column.replace("_", " ").title(),
+        marker="o",
+        markersize=5,
+        linewidth=2
     )
 
     ax.set_title(
@@ -167,3 +187,6 @@ fig.tight_layout()
 
 # Display the Matplotlib figure in Streamlit.
 st.pyplot(fig)
+
+# Close the figure after displaying it.
+plt.close(fig)
