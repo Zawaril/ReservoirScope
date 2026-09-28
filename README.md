@@ -129,7 +129,7 @@ streamlit run app.py
 
 The deployed Streamlit application will be available here:
 
-**Streamlit:** [Add deployment URL]
+**Streamlit:** https://reservoirscope.streamlit.app/
 
 ## Repository
 

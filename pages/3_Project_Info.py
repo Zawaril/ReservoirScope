@@ -123,3 +123,9 @@ st.header("Project Repository")
 st.markdown(
     "[View ReservoirScope on GitHub](https://github.com/Zawaril/ReservoirScope)"
 )
+
+st.header("Live Application")
+
+st.markdown(
+    "[Open ReservoirScope](https://reservoirscope.streamlit.app/)"
+)
