@@ -39,8 +39,16 @@ def load_data():
         reservoirs_df["date"]
     )
 
-    reservoirs_df["next_publication_date"] = pd.to_datetime(
+    # Replace placeholder publication dates with missing values.
+    reservoirs_df["next_publication_date"] = (
         reservoirs_df["next_publication_date"]
+        .replace("0001-01-01T00:00:00", pd.NA)
+    )
+
+    # Convert the remaining publication dates to datetime.
+    reservoirs_df["next_publication_date"] = pd.to_datetime(
+        reservoirs_df["next_publication_date"],
+        errors="coerce"
     )
 
     # Sort the dataset by date.

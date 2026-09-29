@@ -127,7 +127,7 @@ streamlit run app.py
 
 ## Live Application
 
-The deployed Streamlit application will be available here:
+ReservoirScope is publicly available through Streamlit Community Cloud.
 
 **Streamlit:** https://reservoirscope.streamlit.app/
 

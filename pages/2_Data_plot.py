@@ -120,6 +120,14 @@ date_mean = (
 )
 
 
+# Check whether the selected range contains national observations.
+if date_mean.empty:
+    st.warning(
+        "No national reservoir data available for the selected month range."
+    )
+    st.stop()
+
+
 # Create the figure.
 fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -127,28 +135,57 @@ fig, ax = plt.subplots(figsize=(12, 6))
 if selected_column == "All Columns":
 
     # Normalize the measurements to the range 0–1.
+    column_min = date_mean.min()
+    column_range = date_mean.max() - column_min
+
     normalized_data = (
-        (date_mean - date_mean.min())
-        / (date_mean.max() - date_mean.min()).replace(0, float("nan"))
+        (date_mean - column_min)
+        / column_range.replace(0, float("nan"))
     )
 
     # Assign 0.5 to variables with constant values.
-    normalized_data = normalized_data.fillna(0.5)
+    constant_columns = column_range[
+        column_range == 0
+    ].index
+
+    normalized_data[constant_columns] = 0.5
 
     # Use different line styles and markers to distinguish overlapping lines.
-    line_styles = ["-", "--", "-.", ":", "-"]
-    markers = ["o", "s", "^", "D", "x"]
+    plot_order = [
+        "capacity_TWh",
+        "stored_energy_TWh",
+        "previous_week_fill_level",
+        "change_in_fill_level",
+        "fill_level",
+    ]
 
-    for i, column in enumerate(measurement_columns):
+    line_styles = {
+        "capacity_TWh": "--",
+        "stored_energy_TWh": "-.",
+        "previous_week_fill_level": ":",
+        "change_in_fill_level": "-",
+        "fill_level": "-",
+    }
+
+    markers = {
+        "capacity_TWh": "s",
+        "stored_energy_TWh": "^",
+        "previous_week_fill_level": "D",
+        "change_in_fill_level": "x",
+        "fill_level": "o",
+    }
+
+    for column in plot_order:
         ax.plot(
             normalized_data.index,
             normalized_data[column],
             label=column.replace("_", " ").title(),
-            linestyle=line_styles[i],
-            marker=markers[i],
+            linestyle=line_styles[column],
+            marker=markers[column],
             markersize=5,
-            linewidth=2,
-            alpha=0.8
+            linewidth=3 if column == "fill_level" else 2,
+            alpha=0.8,
+            zorder=5 if column == "fill_level" else 2
         )
 
     ax.set_title("Normalized Reservoir Measurements")
