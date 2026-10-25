@@ -16,4 +16,4 @@ st.write(
 )
 
 st.markdown("IND320 - Data to Decision")
-st.write("Compulsory Project Work - Part 1")
+st.write("Compulsory Project Work")
