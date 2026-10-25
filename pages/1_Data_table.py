@@ -1,95 +1,79 @@
 import streamlit as st
 import pandas as pd
-from pathlib import Path
 
-# Project root directory
-BASE_DIR = Path(__file__).resolve().parent.parent
+from nve_api import load_nve_data
 
-# Path to reservoirs.csv in the project root
-DATA_PATH = BASE_DIR / "reservoirs.csv"
 
 st.title("Reservoir Data")
 
 
-@st.cache_data
-def load_data():
-    """Load and prepare the local reservoir CSV file."""
+# Load the prepared dataset directly from the NVE API.
+reservoirs_df = load_nve_data()
 
-    reservoirs_df = pd.read_csv(DATA_PATH)
-
-    # Rename original Norwegian column names to clear English names.
-    reservoirs_df = reservoirs_df.rename(
-        columns={
-            "dato_Id": "date",
-            "omrType": "area_type",
-            "omrnr": "area_number",
-            "iso_aar": "year",
-            "iso_uke": "week",
-            "fyllingsgrad": "fill_level",
-            "kapasitet_TWh": "capacity_TWh",
-            "fylling_TWh": "stored_energy_TWh",
-            "neste_Publiseringsdato": "next_publication_date",
-            "fyllingsgrad_forrige_uke": "previous_week_fill_level",
-            "endring_fyllingsgrad": "change_in_fill_level",
-        }
-    )
-
-    # Convert date columns to datetime.
-    reservoirs_df["date"] = pd.to_datetime(
-        reservoirs_df["date"]
-    )
-
-    # Replace placeholder publication dates with missing values.
-    reservoirs_df["next_publication_date"] = (
-        reservoirs_df["next_publication_date"]
-        .replace("0001-01-01T00:00:00", pd.NA)
-    )
-
-    # Convert the remaining publication dates to datetime.
-    reservoirs_df["next_publication_date"] = pd.to_datetime(
-        reservoirs_df["next_publication_date"],
-        errors="coerce"
-    )
-
-    # Sort the dataset by date.
-    reservoirs_df = reservoirs_df.sort_values("date")
-
-    return reservoirs_df
+# Sort the dataset by date.
+reservoirs_df = reservoirs_df.sort_values("date")
 
 
-# Load the prepared dataset.
-reservoirs_df = load_data()
+st.subheader("Select Area Type")
+
+selected_area_type = st.radio(
+    "Area type",
+    ["EL", "NO", "VASS"],
+    horizontal=True
+)
+
+
+# Filter the dataset based on the selected area type.
+filtered_df = reservoirs_df[
+    reservoirs_df["area_type"] == selected_area_type
+].copy()
+
+
+# Find the available area numbers for the selected area type.
+area_numbers = sorted(
+    int(number)
+    for number in filtered_df["area_number"]
+    .dropna()
+    .unique()
+)
 
 
 st.subheader("Imported Reservoir Dataset")
 
 st.write(
-    "The imported reservoir dataset after basic preprocessing."
+    "The reservoir dataset retrieved directly from the NVE "
+    "Magasinstatistikk API after basic preprocessing."
 )
 
 st.dataframe(
-    reservoirs_df,
+    filtered_df,
     use_container_width=True,
     hide_index=True
 )
 
 
-# Find the earliest date in the dataset.
-first_date = reservoirs_df["date"].min()
+# Find the earliest date in the filtered dataset.
+first_date = filtered_df["date"].min()
 
 # Filter observations belonging to the first calendar month.
-first_month = reservoirs_df[
-    (reservoirs_df["date"].dt.year == first_date.year)
-    & (reservoirs_df["date"].dt.month == first_date.month)
+first_month = filtered_df[
+    (filtered_df["date"].dt.year == first_date.year)
+    & (filtered_df["date"].dt.month == first_date.month)
 ].sort_values("date")
 
 
+# Create a readable first-month label.
+first_month_label = first_date.strftime("%Y-%m")
+
+
 # Display all observations from the first month.
-st.subheader("Data from the First Month")
+st.subheader(
+    f"Data from {first_month_label}"
+)
 
 st.write(
     "The table below shows all observations recorded during "
-    "the first month available in the dataset."
+    "the first month available for the selected area type."
 )
 
 st.dataframe(
@@ -100,7 +84,7 @@ st.dataframe(
 
 
 # Continuous reservoir measurement columns.
-numeric_columns = [
+plot_columns = [
     "fill_level",
     "capacity_TWh",
     "stored_energy_TWh",
@@ -109,46 +93,135 @@ numeric_columns = [
 ]
 
 
-# Create one row for each measurement variable.
-# The second column stores the values observed during the first month.
-table_data = pd.DataFrame(
-    {
-        "Variable": numeric_columns,
-        "First Month": [
-            first_month[column].tolist()
-            for column in numeric_columns
-        ],
+# Clear display names for the table.
+display_names = {
+    "fill_level": "Filling level",
+    "capacity_TWh": "Capacity (TWh)",
+    "stored_energy_TWh": "Stored Energy (TWh)",
+    "previous_week_fill_level": "Filling level previous week",
+    "change_in_fill_level": "Change in filling level",
+}
+
+
+# Create one row for each area number.
+table_rows = []
+
+for area_number, group in first_month.groupby(
+    "area_number"
+):
+
+    group = group.sort_values("date")
+
+    row = {
+        "Area number": int(area_number)
     }
+
+    for column in plot_columns:
+
+        row[
+            display_names[column]
+        ] = (
+            group[column]
+            .dropna()
+            .tolist()
+        )
+
+    table_rows.append(row)
+
+
+# Create the sparkline table.
+table_data = pd.DataFrame(
+    table_rows
 )
 
 
-st.subheader("Reservoir Measurements During the First Month")
+st.subheader(
+    "Reservoir Measurements During the First Month"
+)
 
 st.write(
     """
-    The table below shows the reservoir measurement variables.
-    Each sparkline represents the values observed during the
-    first month available in the dataset.
+    Each row represents an area number associated with the
+    selected area type. The sparklines show how the main
+    reservoir measurements changed during the first available month.
     """
 )
 
 
+# Determine useful limits for the sparkline columns.
+capacity_max = first_month[
+    "capacity_TWh"
+].max()
 
-# Display the first-month measurements using line charts.
-st.dataframe(
-    table_data,
-    column_config={
-        "Variable": st.column_config.TextColumn(
-            "Variable",
-            width="medium"
+stored_energy_max = first_month[
+    "stored_energy_TWh"
+].max()
+
+change_min = first_month[
+    "change_in_fill_level"
+].min()
+
+change_max = first_month[
+    "change_in_fill_level"
+].max()
+
+
+# Configure the line-chart columns.
+column_config = {
+    "Area number": st.column_config.NumberColumn(
+        "Area number",
+        width="small"
+    ),
+
+    "Filling level": st.column_config.LineChartColumn(
+        "Filling level",
+        y_min=0,
+        y_max=1,
+        color="#FF4B4B"
+    ),
+
+    "Capacity (TWh)": st.column_config.LineChartColumn(
+        "Capacity (TWh)",
+        y_min=0,
+        y_max=max(
+            float(capacity_max) * 1.1,
+            1.0
+        ),
+        color="#FF4B4B"
+    ),
+
+    "Stored Energy (TWh)": st.column_config.LineChartColumn(
+        "Stored Energy (TWh)",
+        y_min=0,
+        y_max=max(
+            float(stored_energy_max) * 1.1,
+            1.0
+        ),
+        color="#FF4B4B"
+    ),
+
+    "Filling level previous week":
+        st.column_config.LineChartColumn(
+            "Filling level previous week",
+            y_min=0,
+            y_max=1,
+            color="#FF4B4B"
         ),
 
-        "First Month": st.column_config.LineChartColumn(
-            "First Month",
-            width="large",
-            color="#C46A42"
-        )
-    },
+    "Change in filling level":
+        st.column_config.LineChartColumn(
+            "Change in filling level",
+            y_min=float(change_min),
+            y_max=float(change_max),
+            color="#FF4B4B"
+        ),
+}
+
+
+# Display the first-month measurements.
+st.dataframe(
+    table_data,
+    column_config=column_config,
     hide_index=True,
     use_container_width=True
 )
