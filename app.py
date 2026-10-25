@@ -23,14 +23,25 @@ plot_page = st.Page(
     title="Reservoir Visualisation"
 )
 
+transmission_page = st.Page(
+    "pages/3_Electricity_Transmission.py",
+    title="Electricity Transmission"
+)
+
 info_page = st.Page(
-    "pages/3_Project_Info.py",
+    "pages/4_Project_Info.py",
     title="Project Information"
 )
 
 # Configure sidebar navigation
 navigation = st.navigation(
-    [home_page, data_page, plot_page, info_page],
+    [
+        home_page,
+        data_page,
+        plot_page,
+        transmission_page,
+        info_page
+    ],
     position="sidebar"
 )
 

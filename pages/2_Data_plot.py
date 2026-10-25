@@ -1,52 +1,18 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from pathlib import Path
+
+from nve_api import load_nve_data
 
 
 st.title("Reservoir Visualisation")
 
 
-# Project root directory
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Load the prepared dataset directly from the NVE API.
+reservoirs_df = load_nve_data()
 
-# Path to reservoirs.csv in the project root
-DATA_PATH = BASE_DIR / "reservoirs.csv"
-
-
-@st.cache_data
-def load_data():
-    """Load and prepare the reservoir dataset."""
-
-    reservoirs_df = pd.read_csv(DATA_PATH)
-
-    # Rename the original Norwegian column names to clear English names.
-    reservoirs_df = reservoirs_df.rename(
-        columns={
-            "dato_Id": "date",
-            "omrType": "area_type",
-            "omrnr": "area_number",
-            "iso_aar": "year",
-            "iso_uke": "week",
-            "fyllingsgrad": "fill_level",
-            "kapasitet_TWh": "capacity_TWh",
-            "fylling_TWh": "stored_energy_TWh",
-            "neste_Publiseringsdato": "next_publication_date",
-            "fyllingsgrad_forrige_uke": "previous_week_fill_level",
-            "endring_fyllingsgrad": "change_in_fill_level",
-        }
-    )
-
-    # Convert the observation date to datetime format.
-    reservoirs_df["date"] = pd.to_datetime(
-        reservoirs_df["date"]
-    )
-
-    return reservoirs_df
-
-
-# Load the prepared dataset.
-reservoirs_df = load_data()
+# Sort the dataset by date.
+reservoirs_df = reservoirs_df.sort_values("date")
 
 
 # Reservoir measurement variables suitable for time-series plotting.
@@ -57,6 +23,43 @@ measurement_columns = [
     "previous_week_fill_level",
     "change_in_fill_level",
 ]
+
+
+# Select geographical area type.
+st.subheader("Select Area")
+
+selected_area_type = st.radio(
+    "Area type",
+    ["EL", "NO", "VASS"],
+    horizontal=True
+)
+
+
+# Filter observations belonging to the selected area type.
+area_type_df = reservoirs_df[
+    reservoirs_df["area_type"] == selected_area_type
+].copy()
+
+
+# Find the area numbers associated with the selected area type.
+area_numbers = sorted(
+    area_type_df["area_number"]
+    .dropna()
+    .unique()
+)
+
+
+# Select one of the available area numbers.
+selected_area_number = st.selectbox(
+    "Select area number",
+    area_numbers
+)
+
+
+# Filter observations belonging to the selected area number.
+area_df = area_type_df[
+    area_type_df["area_number"] == selected_area_number
+].copy()
 
 
 # Create the required drop-down menu.
@@ -70,7 +73,7 @@ selected_column = st.selectbox(
 
 # Create month options in YYYY-MM format.
 month_options = sorted(
-    reservoirs_df["date"]
+    area_df["date"]
     .dt.to_period("M")
     .astype(str)
     .unique()
@@ -92,22 +95,15 @@ start_month, end_month = selected_months
 # Convert the date column temporarily to YYYY-MM strings
 # and filter observations within the selected month range.
 month_series = (
-    reservoirs_df["date"]
+    area_df["date"]
     .dt.to_period("M")
     .astype(str)
 )
 
-filtered_df = reservoirs_df[
+filtered_df = area_df[
     (month_series >= start_month)
     & (month_series <= end_month)
-]
-
-
-# Select the national reservoir data.
-filtered_df = filtered_df[
-    (filtered_df["area_type"] == "NO")
-    & (filtered_df["area_number"] == 0)
-]
+].copy()
 
 
 # Calculate the mean for each date to obtain
@@ -120,12 +116,19 @@ date_mean = (
 )
 
 
-# Check whether the selected range contains national observations.
+# Check whether the selected range contains observations.
 if date_mean.empty:
     st.warning(
-        "No national reservoir data available for the selected month range."
+        "No reservoir data available for the selected month range."
     )
     st.stop()
+
+
+# Display information about the selected geographical area.
+st.write(
+    f"Showing **{selected_area_type}** area type, "
+    f"area number **{selected_area_number}**."
+)
 
 
 # Create the figure.
@@ -188,7 +191,11 @@ if selected_column == "All Columns":
             zorder=5 if column == "fill_level" else 2
         )
 
-    ax.set_title("Normalized Reservoir Measurements")
+    ax.set_title(
+        f"Normalized Reservoir Measurements "
+        f"({selected_area_type} {selected_area_number})"
+    )
+
     ax.set_ylabel("Normalized Value (0–1)")
     ax.legend()
 
@@ -205,7 +212,8 @@ else:
     )
 
     ax.set_title(
-        selected_column.replace("_", " ").title()
+        f"{selected_column.replace('_', ' ').title()} "
+        f"({selected_area_type} {selected_area_number})"
     )
 
     ax.set_ylabel(
