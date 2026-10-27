@@ -70,6 +70,13 @@ selected_column = st.selectbox(
     options
 )
 
+st.caption(
+    "The NVE HentOffentligData endpoint returns the complete public "
+    "dataset and does not provide start and end date parameters. "
+    "Therefore, ReservoirScope downloads and caches the API dataset, "
+    "and the month-range slider controls which interval is selected "
+    "for analysis and visualisation."
+)
 
 # Create month options in YYYY-MM format.
 month_options = sorted(
