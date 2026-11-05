@@ -28,8 +28,18 @@ transmission_page = st.Page(
     title="Electricity Transmission"
 )
 
+seasonal_page = st.Page(
+    "pages/4_Seasonal_Analysis.py",
+    title="Seasonal Analysis"
+)
+
+weather_page = st.Page(
+    "pages/5_Weather_Anomalies.py",
+    title="Weather Outliers and Anomalies"
+)
+
 info_page = st.Page(
-    "pages/4_Project_Info.py",
+    "pages/6_Project_Info.py",
     title="Project Information"
 )
 
@@ -40,6 +50,8 @@ navigation = st.navigation(
         data_page,
         plot_page,
         transmission_page,
+        seasonal_page,
+        weather_page,
         info_page
     ],
     position="sidebar"
