@@ -2,4 +2,10 @@
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+.streamlit/secrets.tomldata/no3_weather_2024_*.parquet
+
+# Local raw weather data
+/data/no3_weather_2024_*.parquet
+
+# Streamlit local secrets
 .streamlit/secrets.toml
