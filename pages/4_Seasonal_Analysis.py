@@ -92,6 +92,11 @@ with stl_tab:
         value=53,
         step=2
     )
+    
+    st.caption(
+    "Smaller values allow the seasonal pattern to vary more over time; "
+    "larger values produce a smoother and more stable seasonal component."
+    )
 
     trend = st.slider(
         "Trend smoother",
@@ -99,6 +104,11 @@ with stl_tab:
         max_value=209,
         value=105,
         step=2
+    )
+    
+    st.caption(
+    "Smaller values make the trend more responsive to short-term changes; "
+    "larger values produce a smoother long-term trend."
     )
 
     robust = st.checkbox(
