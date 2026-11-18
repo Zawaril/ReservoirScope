@@ -1,23 +1,25 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 from pymongo import MongoClient
 
 
 st.title("Electricity Transmission")
 
 
-# Connect to MongoDB using Streamlit secrets.
+
+# Connect to MongoDB
 client = MongoClient(
     st.secrets["MONGODB_URI"]
 )
 
 db = client["reservoirscope"]
-
 collection = db["entsoe_flows"]
 
 
-# Load ENTSO-E data from MongoDB.
+
+# Load ENTSO-E data from MongoDB
 records = list(
     collection.find(
         {},
@@ -28,7 +30,8 @@ records = list(
 transmission_df = pd.DataFrame(records)
 
 
-# Check whether data is available.
+
+# Check whether data is available
 if transmission_df.empty:
     st.warning(
         "No electricity transmission data is currently available."
@@ -36,13 +39,12 @@ if transmission_df.empty:
     st.stop()
 
 
-# Convert timestamp to datetime.
+
+# Prepare data
 transmission_df["timestamp"] = pd.to_datetime(
     transmission_df["timestamp"]
 )
 
-
-# Create year and month variables from timestamp.
 transmission_df["year"] = (
     transmission_df["timestamp"].dt.year
 )
@@ -61,7 +63,8 @@ st.write(
 )
 
 
-# Split the page into two columns.
+
+# Page layout
 left_column, right_column = st.columns(2)
 
 
@@ -69,28 +72,22 @@ with left_column:
 
     st.subheader("Yearly Electricity Flow")
 
-    # Select connection.
     selected_connection = st.radio(
         "Select connection",
         ["NO2 ↔ Netherlands"]
     )
 
-
-    # Find available years.
     year_options = sorted(
         transmission_df["year"]
         .dropna()
         .unique()
     )
 
-
-    # Use 2025 as the default full calendar year when available.
     default_year_index = (
         year_options.index(2025)
         if 2025 in year_options
         else 0
     )
-
 
     selected_year = st.selectbox(
         "Select year",
@@ -98,62 +95,70 @@ with left_column:
         index=default_year_index
     )
 
-
-    # Filter observations for the selected year.
     yearly_df = transmission_df[
-        transmission_df["year"]
-        == selected_year
+        transmission_df["year"] == selected_year
     ].copy()
 
-
-    # Calculate total energy by direction.
-    # ENTSO-E observations are reported at 15-minute intervals,
-    # therefore MW values are multiplied by 0.25 hours to obtain MWh.
+    # ENTSO-E observations are in 15-minute intervals.
+    # Convert MW to MWh by multiplying by 0.25 hours.
     yearly_totals = (
         yearly_df
-        .groupby("direction")["quantity_mw"]
+        .groupby("direction", as_index=False)["quantity_mw"]
         .sum()
-        * 0.25
     )
 
+    yearly_totals["total_mwh"] = (
+        yearly_totals["quantity_mw"] * 0.25
+    )
 
-    # Create pie chart.
     if not yearly_totals.empty:
 
-        fig_pie, ax_pie = plt.subplots(
-            figsize=(6, 6)
-        )
-
-        # Warm colors selected to match the Streamlit theme.
-        pie_colors = [
-            "#C96B7C",
-            "#E6A06D"
-        ]
-
-        ax_pie.pie(
-            yearly_totals.values,
-            labels=yearly_totals.index,
-            autopct="%1.1f%%",
-            colors=pie_colors,
-            startangle=90,
-            wedgeprops={
-                "edgecolor": "white",
-                "linewidth": 2
-            },
-            textprops={
-                "fontsize": 11
+        fig_pie = px.pie(
+            yearly_totals,
+            names="direction",
+            values="total_mwh",
+            title=(
+                f"Electricity Flow – "
+                f"{selected_connection} "
+                f"({selected_year})"
+            ),
+            color="direction",
+            color_discrete_map={
+                "export": "#C96B7C",
+                "import": "#E6A06D"
             }
         )
 
-        ax_pie.set_title(
-            f"Electricity Flow – "
-            f"{selected_connection} "
-            f"({selected_year})"
+        fig_pie.update_traces(
+            textinfo="percent+label",
+            marker=dict(
+                line=dict(
+                    color="white",
+                    width=2
+                )
+            ),
+            hovertemplate=(
+                "Direction: %{label}"
+                "<br>Total energy: %{value:,.0f} MWh"
+                "<br>Share: %{percent}"
+                "<extra></extra>"
+            )
         )
 
-        st.pyplot(fig_pie)
+        fig_pie.update_layout(
+            height=500,
+            margin=dict(
+                l=20,
+                r=20,
+                t=60,
+                b=20
+            )
+        )
 
-        plt.close(fig_pie)
+        st.plotly_chart(
+            fig_pie,
+            use_container_width=True
+        )
 
     else:
 
@@ -165,7 +170,6 @@ with left_column:
 with right_column:
 
     st.subheader("Monthly Electricity Flow")
-
 
     month_names = {
         1: "January",
@@ -182,20 +186,16 @@ with right_column:
         12: "December",
     }
 
-
-    # Find available months for the selected year.
     available_month_numbers = sorted(
         yearly_df["month"]
         .dropna()
         .unique()
     )
 
-
     available_month_names = [
         month_names[month_number]
         for month_number in available_month_numbers
     ]
-
 
     selected_months = st.pills(
         "Select month",
@@ -203,14 +203,10 @@ with right_column:
         selection_mode="multi"
     )
 
-
-    # Show the first available month by default.
     if not selected_months:
-
         selected_months = [
             available_month_names[0]
         ]
-
 
     selected_month_numbers = [
         month_number
@@ -219,78 +215,57 @@ with right_column:
         if month_name in selected_months
     ]
 
-
-    # Filter observations for selected months.
     monthly_df = yearly_df[
         yearly_df["month"].isin(
             selected_month_numbers
         )
-    ].sort_values(
-        "timestamp"
-    )
+    ].sort_values("timestamp")
 
-
-    # Create line plot.
     if not monthly_df.empty:
 
-        fig_line, ax_line = plt.subplots(
-            figsize=(10, 6)
+        fig_line = px.line(
+            monthly_df,
+            x="timestamp",
+            y="quantity_mw",
+            color="direction",
+            title=(
+                f"Electricity Flow – "
+                f"{selected_connection}"
+            ),
+            color_discrete_map={
+                "export": "#C96B7C",
+                "import": "#E6A06D"
+            }
         )
 
-
-        # Line colors matching the warm application theme.
-        direction_colors = {
-            "export": "#C96B7C",
-            "import": "#E6A06D"
-        }
-
-
-        for direction in (
-            monthly_df["direction"].unique()
-        ):
-
-            direction_df = monthly_df[
-                monthly_df["direction"]
-                == direction
-            ]
-
-            ax_line.plot(
-                direction_df["timestamp"],
-                direction_df["quantity_mw"],
-                label=direction,
-                color=direction_colors.get(
-                    direction
-                ),
-                linewidth=2
+        fig_line.update_traces(
+            mode="lines",
+            line=dict(width=2),
+            hovertemplate=(
+                "Time: %{x|%d %b %Y %H:%M}"
+                "<br>Flow: %{y:.2f} MW"
+                "<br>Direction: %{fullData.name}"
+                "<extra></extra>"
             )
-
-
-        ax_line.set_title(
-            f"Electricity Flow – "
-            f"{selected_connection}"
         )
 
-        ax_line.set_xlabel(
-            "Time"
+        fig_line.update_layout(
+            xaxis_title="Time",
+            yaxis_title="Physical Flow (MW)",
+            hovermode="x unified",
+            height=500,
+            margin=dict(
+                l=20,
+                r=20,
+                t=60,
+                b=20
+            )
         )
 
-        ax_line.set_ylabel(
-            "Physical Flow (MW)"
+        st.plotly_chart(
+            fig_line,
+            use_container_width=True
         )
-
-        ax_line.legend()
-
-        ax_line.grid(
-            alpha=0.3
-        )
-
-        fig_line.autofmt_xdate()
-
-        fig_line.tight_layout()
-
-        st.pyplot(fig_line)
-
-        plt.close(fig_line)
 
     else:
 
@@ -299,7 +274,8 @@ with right_column:
         )
 
 
-# Data-source documentation.
+
+# Data-source documentation
 with st.expander("About the Data Source"):
 
     st.write(

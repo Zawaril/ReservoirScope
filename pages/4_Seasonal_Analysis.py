@@ -1,5 +1,5 @@
 import streamlit as st
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 from scipy.signal import spectrogram
 from statsmodels.tsa.seasonal import STL
@@ -15,11 +15,13 @@ st.write(
 )
 
 
-# Load reservoir data directly from the NVE API.
+
+# Load reservoir data
 reservoir_df = load_nve_data()
 
 
-# Select geographical area type.
+
+# Area selection
 area_type = st.radio(
     "Select area type",
     ["EL", "NO", "VASS"],
@@ -32,7 +34,6 @@ area_df = reservoir_df[
 ].copy()
 
 
-# Identify the area numbers belonging to the selected area type.
 area_numbers = sorted(
     area_df["area_number"]
     .dropna()
@@ -46,7 +47,6 @@ area_number = st.selectbox(
 )
 
 
-# Select and prepare the reservoir filling-level series.
 selected_df = (
     area_df[
         area_df["area_number"] == area_number
@@ -67,7 +67,8 @@ st.caption(
 )
 
 
-# Create the two required analysis tabs.
+
+# Analysis tabs
 stl_tab, spectrogram_tab = st.tabs(
     [
         "STL Decomposition",
@@ -76,14 +77,19 @@ stl_tab, spectrogram_tab = st.tabs(
 )
 
 
+
+# STL TAB
 with stl_tab:
 
-    st.subheader("STL Decomposition")
+    st.subheader(
+        "STL Decomposition"
+    )
 
     st.write(
         "STL separates reservoir filling level into trend, "
         "seasonal, and residual components."
     )
+
 
     seasonal = st.slider(
         "Seasonal smoother",
@@ -92,11 +98,13 @@ with stl_tab:
         value=53,
         step=2
     )
-    
+
+
     st.caption(
-    "Smaller values allow the seasonal pattern to vary more over time; "
-    "larger values produce a smoother and more stable seasonal component."
+        "Smaller values allow the seasonal pattern to vary more over time; "
+        "larger values produce a smoother and more stable seasonal component."
     )
+
 
     trend = st.slider(
         "Trend smoother",
@@ -105,22 +113,26 @@ with stl_tab:
         value=105,
         step=2
     )
-    
+
+
     st.caption(
-    "Smaller values make the trend more responsive to short-term changes; "
-    "larger values produce a smoother long-term trend."
+        "Smaller values make the trend more responsive to short-term changes; "
+        "larger values produce a smoother long-term trend."
     )
+
 
     robust = st.checkbox(
         "Use robust STL fitting",
         value=True
     )
 
+
     series = (
         selected_df
         .set_index("date")["fill_level"]
         .sort_index()
     )
+
 
     try:
 
@@ -134,22 +146,94 @@ with stl_tab:
 
         result = stl.fit()
 
-        fig = result.plot()
 
-        fig.set_size_inches(
-            12,
-            8
+       
+        # Interactive Plotly STL figure
+        stl_fig = go.Figure()
+
+
+        stl_fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=result.observed,
+                mode="lines",
+                name="Observed",
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Observed: %{y:.3f}"
+                    "<extra></extra>"
+                )
+            )
         )
 
-        fig.suptitle(
-            f"STL Decomposition – "
-            f"{area_type} {area_number}",
-            y=1.02
+
+        stl_fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=result.trend,
+                mode="lines",
+                name="Trend",
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Trend: %{y:.3f}"
+                    "<extra></extra>"
+                )
+            )
         )
 
-        st.pyplot(fig)
 
-        plt.close(fig)
+        stl_fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=result.seasonal,
+                mode="lines",
+                name="Seasonal",
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Seasonal: %{y:.3f}"
+                    "<extra></extra>"
+                )
+            )
+        )
+
+
+        stl_fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=result.resid,
+                mode="lines",
+                name="Residual",
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Residual: %{y:.3f}"
+                    "<extra></extra>"
+                )
+            )
+        )
+
+
+        stl_fig.update_layout(
+            title=(
+                f"STL Decomposition – "
+                f"{area_type} {area_number}"
+            ),
+            xaxis_title="Date",
+            yaxis_title="Component value",
+            hovermode="x unified",
+            height=650
+        )
+
+
+        stl_fig.update_xaxes(
+            rangeslider_visible=True
+        )
+
+
+        st.plotly_chart(
+            stl_fig,
+            use_container_width=True
+        )
+
 
     except ValueError as error:
 
@@ -158,14 +242,19 @@ with stl_tab:
         )
 
 
+
+# SPECTROGRAM TAB
 with spectrogram_tab:
 
-    st.subheader("Spectrogram")
+    st.subheader(
+        "Spectrogram"
+    )
 
     st.write(
         "The spectrogram shows how the frequency structure "
         "of reservoir filling levels changes over time."
     )
+
 
     window_length = st.slider(
         "Window length",
@@ -175,10 +264,12 @@ with spectrogram_tab:
         step=13
     )
 
+
     max_overlap = max(
         0,
         window_length - 1
     )
+
 
     window_overlap = st.slider(
         "Window overlap",
@@ -191,10 +282,12 @@ with spectrogram_tab:
         step=1
     )
 
+
     values = (
         selected_df["fill_level"]
         .to_numpy()
     )
+
 
     frequencies, times, power = spectrogram(
         values,
@@ -203,36 +296,39 @@ with spectrogram_tab:
         noverlap=window_overlap
     )
 
-    fig, ax = plt.subplots(
-        figsize=(12, 6)
+
+   
+    # Interactive Plotly heatmap
+    spectrogram_fig = go.Figure(
+        data=go.Heatmap(
+            x=times,
+            y=frequencies,
+            z=power,
+            colorbar=dict(
+                title="Power"
+            ),
+            hovertemplate=(
+                "Time index: %{x:.1f} weeks"
+                "<br>Frequency: %{y:.4f} cycles/week"
+                "<br>Power: %{z:.6f}"
+                "<extra></extra>"
+            )
+        )
     )
 
-    mesh = ax.pcolormesh(
-        times,
-        frequencies,
-        power,
-        shading="auto"
+
+    spectrogram_fig.update_layout(
+        title=(
+            "Reservoir Filling Spectrogram – "
+            f"{area_type} {area_number}"
+        ),
+        xaxis_title="Time index (weeks)",
+        yaxis_title="Frequency (cycles per week)",
+        height=650
     )
 
-    ax.set_title(
-        f"Reservoir Filling Spectrogram – "
-        f"{area_type} {area_number}"
+
+    st.plotly_chart(
+        spectrogram_fig,
+        use_container_width=True
     )
-
-    ax.set_xlabel(
-        "Time index (weeks)"
-    )
-
-    ax.set_ylabel(
-        "Frequency (cycles per week)"
-    )
-
-    fig.colorbar(
-        mesh,
-        ax=ax,
-        label="Power"
-    )
-
-    st.pyplot(fig)
-
-    plt.close(fig)

@@ -1,6 +1,5 @@
 streamlit
 pandas
-matplotlib
 requests
 pymongo
 entsoe-py
@@ -8,3 +7,6 @@ scipy
 scikit-learn
 statsmodels
 pyarrow
+plotly
+geopandas
+river

@@ -1,16 +1,18 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 import json
 import requests
 import time
 
+import plotly.graph_objects as go
+
 from scipy.fft import dct, idct
 from sklearn.neighbors import LocalOutlierFactor
 
 
-# Load sampled electricity-area coordinates.
+
+# Load sampled coordinates
 with open(
     "data/elspot_coordinates.json",
     "r",
@@ -19,7 +21,6 @@ with open(
     elspot_coordinates = json.load(file)
 
 
-# Load sampled broad weather-region coordinates.
 with open(
     "data/weather_region_coordinates.json",
     "r",
@@ -28,6 +29,8 @@ with open(
     weather_region_coordinates = json.load(file)
 
 
+
+# Download weather data
 @st.cache_data(show_spinner=False)
 def download_weather_summary(
     coordinates,
@@ -39,6 +42,9 @@ def download_weather_summary(
     """
     Download ERA5 weather data from Open-Meteo and return
     hourly averages across all selected locations.
+
+    Locations are pooled into batches to reduce the number
+    of API requests.
     """
 
     url = "https://archive-api.open-meteo.com/v1/archive"
@@ -50,6 +56,7 @@ def download_weather_summary(
         len(coordinates),
         batch_size
     ):
+
         batch = coordinates[
             start:start + batch_size
         ]
@@ -81,6 +88,7 @@ def download_weather_summary(
             "timezone": "UTC"
         }
 
+        # Retry if the API rate limit is reached.
         for attempt in range(
             max_retries
         ):
@@ -108,6 +116,7 @@ def download_weather_summary(
             break
 
         else:
+
             raise RuntimeError(
                 "Open-Meteo rate limit persisted "
                 "after retries."
@@ -150,6 +159,7 @@ def download_weather_summary(
             ignore_index=True
         )
 
+        # Average all locations in this API batch.
         batch_summary = (
             batch_df
             .groupby(
@@ -181,6 +191,7 @@ def download_weather_summary(
         ignore_index=True
     )
 
+    # Weighted combination of batch averages.
     combined[
         "temperature_sum"
     ] = (
@@ -256,17 +267,20 @@ def download_weather_summary(
     ]
 
 
+
+# Page title
 st.title(
     "Weather Outliers and Anomalies"
 )
 
 st.write(
-    "Analyse precipitation outliers and temperature anomalies "
-    "for ERA5 weather data downloaded from Open-Meteo."
+    "Analyse temperature and precipitation using "
+    "DCT-based SATV/SPC and Local Outlier Factor."
 )
 
 
-# Match the area types used by Magasinstatistikk.
+
+# Area selection
 area_type = st.radio(
     "Select area type",
     [
@@ -336,18 +350,21 @@ else:
 
     region_identifier = "Norway"
 
-    # Use a balanced subset from East, West and North
-    # to keep the national weather download practical.
+    # Balanced national subset from
+    # East, West and North.
     selected_coordinates = []
 
     for coordinates in (
         weather_region_coordinates.values()
     ):
+
         selected_coordinates.extend(
             coordinates[:100]
         )
 
 
+
+# Date selection
 start_date = st.date_input(
     "Start date",
     value=pd.to_datetime(
@@ -372,8 +389,11 @@ if start_date > end_date:
     st.stop()
 
 
+
+# Download button
 download_weather = st.button(
-    "Download weather data"
+    "Download weather data",
+    type="primary"
 )
 
 
@@ -388,7 +408,8 @@ if not download_weather:
 
 
 with st.spinner(
-    f"Downloading ERA5 weather data for {region_identifier}..."
+    f"Downloading ERA5 weather data for "
+    f"{region_identifier}..."
 ):
 
     try:
@@ -407,7 +428,8 @@ with st.spinner(
     except Exception as error:
 
         st.error(
-            f"Weather data could not be downloaded: {error}"
+            f"Weather data could not be downloaded: "
+            f"{error}"
         )
 
         st.stop()
@@ -424,19 +446,87 @@ st.success(
 )
 
 
-# Create the two required analysis tabs.
+
+# Weather property selector
+st.subheader(
+    "Analysis settings"
+)
+
+weather_property = st.selectbox(
+    "Weather property",
+    [
+        "Temperature",
+        "Precipitation"
+    ],
+    index=0,
+    help=(
+        "Select which meteorological variable should "
+        "be analysed with SATV/SPC and LOF."
+    )
+)
+
+
+if weather_property == "Temperature":
+
+    analysis_column = (
+        "temperature_2m"
+    )
+
+    y_label = (
+        "Temperature (°C)"
+    )
+
+else:
+
+    analysis_column = (
+        "precipitation"
+    )
+
+    y_label = (
+        "Precipitation (mm)"
+    )
+
+
+# Hourly regional average for selected property.
+hourly_avg = (
+    weather_df
+    .groupby(
+        "time",
+        as_index=False
+    )[
+        analysis_column
+    ]
+    .mean()
+    .sort_values(
+        "time"
+    )
+)
+
+
+
+# Analysis tabs
 spc_tab, lof_tab = st.tabs(
     [
-        "Precipitation SPC",
-        "Temperature LOF"
+        "SATV / SPC",
+        "LOF"
     ]
 )
 
 
+
+# SATV / SPC
+
 with spc_tab:
 
     st.subheader(
-        "Precipitation Outlier Detection"
+        f"{weather_property} – SATV and Robust SPC"
+    )
+
+    st.write(
+        "DCT filtering separates the lower-frequency "
+        "baseline from short-term variation. Robust "
+        "control limits are calculated from the SATV "
+        "component using the median and MAD."
     )
 
     frequency_cutoff = st.slider(
@@ -448,49 +538,45 @@ with spc_tab:
     )
 
     n_std = st.slider(
-        "Number of standard deviations",
+        "Number of robust standard deviations",
         min_value=1.0,
         max_value=5.0,
         value=3.0,
         step=0.5
     )
 
-    hourly_avg = (
-        weather_df
-        .groupby(
-            "time",
-            as_index=False
-        )[
-            "precipitation"
-        ]
-        .mean()
-        .sort_values(
-            "time"
-        )
-    )
 
     values = hourly_avg[
-        "precipitation"
+        analysis_column
     ].to_numpy()
 
 
-    # Apply the Discrete Cosine Transform.
+   
+    # DCT
     coefficients = dct(
         values,
         norm="ortho"
     )
 
 
-    # Low-frequency component represents the seasonal baseline.
-    low_pass_coefficients = np.zeros_like(
-        coefficients
+    # Low-frequency component.
+    low_pass_coefficients = (
+        np.zeros_like(
+            coefficients
+        )
+    )
+
+    cutoff = min(
+        frequency_cutoff,
+        len(coefficients)
     )
 
     low_pass_coefficients[
-        :frequency_cutoff
+        :cutoff
     ] = coefficients[
-        :frequency_cutoff
+        :cutoff
     ]
+
 
     seasonal_baseline = idct(
         low_pass_coefficients,
@@ -498,14 +584,16 @@ with spc_tab:
     )
 
 
-    # High-pass component gives seasonally adjusted variation.
+  
+    # SATV
     high_pass_coefficients = (
         coefficients.copy()
     )
 
     high_pass_coefficients[
-        :frequency_cutoff
+        :cutoff
     ] = 0
+
 
     satv = idct(
         high_pass_coefficients,
@@ -513,7 +601,8 @@ with spc_tab:
     )
 
 
-    # Robust SPC limits based on median and MAD.
+   
+    # Robust SPC limits
     centre = np.median(
         satv
     )
@@ -528,6 +617,7 @@ with spc_tab:
         1.4826 * mad
     )
 
+
     lower_limit = (
         centre
         - n_std
@@ -541,7 +631,8 @@ with spc_tab:
     )
 
 
-    # Convert SATV limits back to precipitation-scale curves.
+    # Convert residual limits back to
+    # original weather-property scale.
     lower_boundary = (
         seasonal_baseline
         + lower_limit
@@ -553,107 +644,147 @@ with spc_tab:
     )
 
 
-    # Detect observations outside the SPC boundaries.
+    
+    # Detect flagged observations
     outlier_mask = (
         (satv < lower_limit)
         |
         (satv > upper_limit)
     )
 
+
     outliers = hourly_avg.loc[
         outlier_mask
     ].copy()
 
 
-    fig, ax = plt.subplots(
-        figsize=(12, 5)
-    )
-
-    ax.plot(
-        hourly_avg["time"],
-        hourly_avg[
-            "precipitation"
-        ],
-        label="Average precipitation"
-    )
-
-    ax.plot(
-        hourly_avg["time"],
-        upper_boundary,
-        linestyle="--",
-        label="Upper SPC boundary"
-    )
-
-    ax.plot(
-        hourly_avg["time"],
-        lower_boundary,
-        linestyle="--",
-        label="Lower SPC boundary"
-    )
-
-    ax.scatter(
-        outliers["time"],
-        outliers[
-            "precipitation"
-        ],
-        label="Outliers",
-        zorder=3
-    )
-
-    ax.set_title(
-        f"Average {region_identifier} "
-        "Precipitation with SPC Outliers"
-    )
-
-    ax.set_xlabel(
-        "Time"
-    )
-
-    ax.set_ylabel(
-        "Average Precipitation (mm)"
-    )
-
-    ax.grid(
-        True
-    )
-
-    ax.legend()
-
-    st.pyplot(
-        fig
-    )
-
-    plt.close(
-        fig
-    )
+  
+    # Plotly SATV / SPC plot
+    fig = go.Figure()
 
 
-    col1, col2 = st.columns(
-        2
-    )
-
-    with col1:
-
-        st.metric(
-            "Detected outliers",
-            int(
-                outlier_mask.sum()
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg["time"],
+            y=hourly_avg[
+                analysis_column
+            ],
+            mode="lines",
+            name=weather_property,
+            hovertemplate=(
+                "%{x|%d %b %Y %H:%M}"
+                "<br>Value: %{y:.2f}"
+                "<extra></extra>"
             )
         )
+    )
 
-    with col2:
 
-        st.metric(
-            "Outlier percentage",
-            f"{outlier_mask.mean() * 100:.2f}%"
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg["time"],
+            y=upper_boundary,
+            mode="lines",
+            name="Upper SPC boundary",
+            line=dict(
+                dash="dash"
+            )
         )
+    )
 
 
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg["time"],
+            y=lower_boundary,
+            mode="lines",
+            name="Lower SPC boundary",
+            line=dict(
+                dash="dash"
+            )
+        )
+    )
+
+
+    fig.add_trace(
+        go.Scatter(
+            x=outliers["time"],
+            y=outliers[
+                analysis_column
+            ],
+            mode="markers",
+            name="Flagged observations",
+            marker=dict(
+                size=8
+            ),
+            hovertemplate=(
+                "%{x|%d %b %Y %H:%M}"
+                "<br>Flagged value: %{y:.2f}"
+                "<extra></extra>"
+            )
+        )
+    )
+
+
+    fig.update_layout(
+        title=(
+            f"Average {region_identifier} "
+            f"{weather_property} with Robust SPC Limits"
+        ),
+        xaxis_title="Time",
+        yaxis_title=y_label,
+        hovermode="x unified",
+        height=600
+    )
+
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+    
+    # SPC metrics
+    col1, col2, col3 = st.columns(
+        3
+    )
+
+
+    col1.metric(
+        "Flagged observations",
+        int(
+            outlier_mask.sum()
+        )
+    )
+
+
+    col2.metric(
+        "Flagged percentage",
+        f"{outlier_mask.mean() * 100:.2f}%"
+    )
+
+
+    col3.metric(
+        "Robust scale",
+        f"{robust_std:.3f}"
+    )
+
+
+
+# LOF
 with lof_tab:
 
     st.subheader(
-        "Temperature Anomaly Detection"
+        f"{weather_property} – Local Outlier Factor"
     )
+
+    st.write(
+        "Local Outlier Factor compares each observation "
+        "with nearby observations in feature space to "
+        "identify unusual values."
+    )
+
 
     contamination = st.slider(
         "Expected anomaly proportion",
@@ -663,113 +794,115 @@ with lof_tab:
         step=0.001
     )
 
-    temperature_avg = (
-        weather_df
-        .groupby(
-            "time",
-            as_index=False
-        )[
-            "temperature_2m"
+
+    lof_values = (
+        hourly_avg[
+            [
+                analysis_column
+            ]
         ]
-        .mean()
-        .sort_values(
-            "time"
-        )
+        .to_numpy()
     )
 
-    values = temperature_avg[
-        [
-            "temperature_2m"
-        ]
-    ].to_numpy()
 
-
+   
+    # LOF model
     lof = LocalOutlierFactor(
         contamination=contamination
     )
 
+
     labels = lof.fit_predict(
-        values
+        lof_values
     )
+
 
     anomaly_mask = (
         labels == -1
     )
 
-    anomalies = temperature_avg.loc[
+
+    anomalies = hourly_avg.loc[
         anomaly_mask
     ].copy()
 
 
-    fig, ax = plt.subplots(
-        figsize=(12, 5)
-    )
+  
+    # Plotly LOF plot
 
-    ax.plot(
-        temperature_avg[
-            "time"
-        ],
-        temperature_avg[
-            "temperature_2m"
-        ],
-        label="Average temperature"
-    )
+    fig = go.Figure()
 
-    ax.scatter(
-        anomalies[
-            "time"
-        ],
-        anomalies[
-            "temperature_2m"
-        ],
-        label="Anomalies",
-        zorder=3
-    )
 
-    ax.set_title(
-        f"Average {region_identifier} "
-        "Temperature with LOF Anomalies"
-    )
-
-    ax.set_xlabel(
-        "Time"
-    )
-
-    ax.set_ylabel(
-        "Average Temperature (°C)"
-    )
-
-    ax.grid(
-        True
-    )
-
-    ax.legend()
-
-    st.pyplot(
-        fig
-    )
-
-    plt.close(
-        fig
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg["time"],
+            y=hourly_avg[
+                analysis_column
+            ],
+            mode="lines",
+            name=weather_property,
+            hovertemplate=(
+                "%{x|%d %b %Y %H:%M}"
+                "<br>Value: %{y:.2f}"
+                "<extra></extra>"
+            )
+        )
     )
 
 
+    fig.add_trace(
+        go.Scatter(
+            x=anomalies["time"],
+            y=anomalies[
+                analysis_column
+            ],
+            mode="markers",
+            name="LOF anomalies",
+            marker=dict(
+                size=9
+            ),
+            hovertemplate=(
+                "%{x|%d %b %Y %H:%M}"
+                "<br>Anomaly: %{y:.2f}"
+                "<extra></extra>"
+            )
+        )
+    )
+
+
+    fig.update_layout(
+        title=(
+            f"Average {region_identifier} "
+            f"{weather_property} with LOF Anomalies"
+        ),
+        xaxis_title="Time",
+        yaxis_title=y_label,
+        hovermode="x unified",
+        height=600
+    )
+
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+    # LOF metrics
     col1, col2 = st.columns(
         2
     )
 
-    with col1:
 
-        st.metric(
-            "Detected anomalies",
-            int(
-                anomaly_mask.sum()
-            )
+    col1.metric(
+        "Detected anomalies",
+        int(
+            anomaly_mask.sum()
         )
+    )
 
-    with col2:
 
-        st.metric(
-            "Anomaly percentage",
-            f"{anomaly_mask.mean() * 100:.2f}%"
-        )
+    col2.metric(
+        "Anomaly percentage",
+        f"{anomaly_mask.mean() * 100:.2f}%"
+    )

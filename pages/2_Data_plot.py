@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 from nve_api import load_nve_data
 
@@ -8,16 +8,17 @@ from nve_api import load_nve_data
 st.title("Reservoir Visualisation")
 
 
-# Load the prepared dataset directly from the NVE API.
+
+# Load reservoir data
 reservoirs_df = load_nve_data()
 
-# Sort the dataset by date.
 reservoirs_df = reservoirs_df.sort_values(
     "date"
 )
 
 
-# Reservoir measurement variables suitable for time-series plotting.
+
+# Variables available for plotting
 measurement_columns = [
     "fill_level",
     "capacity_TWh",
@@ -26,9 +27,11 @@ measurement_columns = [
     "change_in_fill_level",
 ]
 
+# Area selection
+st.subheader(
+    "Select Area"
+)
 
-# Select geographical area type.
-st.subheader("Select Area")
 
 selected_area_type = st.radio(
     "Area type",
@@ -41,7 +44,6 @@ selected_area_type = st.radio(
 )
 
 
-# Filter observations belonging to the selected area type.
 area_type_df = reservoirs_df[
     reservoirs_df[
         "area_type"
@@ -49,7 +51,6 @@ area_type_df = reservoirs_df[
 ].copy()
 
 
-# Find all area numbers associated with the selected area type.
 area_numbers = sorted(
     int(number)
     for number in (
@@ -62,17 +63,18 @@ area_numbers = sorted(
 )
 
 
-# Display the available area numbers.
 st.write(
     "Available area numbers:",
     area_numbers
 )
 
 
-# Create the variable selector.
+
+# Variable selection
 options = [
     "All Columns"
 ] + measurement_columns
+
 
 selected_column = st.selectbox(
     "Select a reservoir variable",
@@ -89,7 +91,8 @@ st.caption(
 )
 
 
-# Create month options using the full selected area type.
+
+# Month range
 month_options = sorted(
     area_type_df[
         "date"
@@ -102,7 +105,6 @@ month_options = sorted(
 )
 
 
-# Select a range of months.
 selected_months = st.select_slider(
     "Select month range",
     options=month_options,
@@ -118,7 +120,6 @@ start_month, end_month = (
 )
 
 
-# Convert dates to YYYY-MM and filter the selected range.
 month_series = (
     area_type_df[
         "date"
@@ -128,6 +129,7 @@ month_series = (
     )
     .astype(str)
 )
+
 
 filtered_df = area_type_df[
     (
@@ -142,7 +144,8 @@ filtered_df = area_type_df[
 ].copy()
 
 
-# Check that observations exist.
+
+# Validate selected period
 if filtered_df.empty:
 
     st.warning(
@@ -159,16 +162,16 @@ st.write(
 )
 
 
-# Create the figure.
-fig, ax = plt.subplots(
-    figsize=(12, 6)
-)
+
+# Plotly figure
+fig = go.Figure()
 
 
+
+# Plot all variables
 if selected_column == "All Columns":
 
-    # Calculate mean values for each date and variable
-    # across all area numbers.
+    # Mean value for each date across all area numbers.
     date_mean = (
         filtered_df
         .groupby(
@@ -180,7 +183,9 @@ if selected_column == "All Columns":
         .sort_index()
     )
 
-    # Normalize the measurements to the range 0–1.
+
+  
+    # Normalize variables to 0–1
     column_min = (
         date_mean.min()
     )
@@ -189,6 +194,7 @@ if selected_column == "All Columns":
         date_mean.max()
         - column_min
     )
+
 
     normalized_data = (
         (
@@ -201,7 +207,7 @@ if selected_column == "All Columns":
         )
     )
 
-    # Assign 0.5 to variables with constant values.
+
     constant_columns = (
         column_range[
             column_range == 0
@@ -209,12 +215,12 @@ if selected_column == "All Columns":
         .index
     )
 
+
     normalized_data[
         constant_columns
     ] = 0.5
 
 
-    # Plot the normalized measurement variables.
     plot_order = [
         "capacity_TWh",
         "stored_energy_TWh",
@@ -223,73 +229,55 @@ if selected_column == "All Columns":
         "fill_level",
     ]
 
-    line_styles = {
-        "capacity_TWh": "--",
-        "stored_energy_TWh": "-.",
-        "previous_week_fill_level": ":",
-        "change_in_fill_level": "-",
-        "fill_level": "-",
-    }
 
-    markers = {
-        "capacity_TWh": "s",
-        "stored_energy_TWh": "^",
-        "previous_week_fill_level": "D",
-        "change_in_fill_level": "x",
-        "fill_level": "o",
-    }
-
-
+   
+    # Add interactive Plotly traces
     for column in plot_order:
 
-        ax.plot(
-            normalized_data.index,
-            normalized_data[
-                column
-            ],
-            label=column.replace(
-                "_",
-                " "
-            ).title(),
-            linestyle=line_styles[
-                column
-            ],
-            marker=markers[
-                column
-            ],
-            markersize=5,
-            linewidth=(
-                3
-                if column
-                == "fill_level"
-                else 2
-            ),
-            alpha=0.8,
-            zorder=(
-                5
-                if column
-                == "fill_level"
-                else 2
+        fig.add_trace(
+            go.Scatter(
+                x=normalized_data.index,
+                y=normalized_data[
+                    column
+                ],
+                mode="lines+markers",
+                name=column.replace(
+                    "_",
+                    " "
+                ).title(),
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Normalized value: %{y:.3f}"
+                    "<extra></extra>"
+                )
             )
         )
 
 
-    ax.set_title(
-        f"Normalized Reservoir Measurements "
-        f"({selected_area_type} – All Area Numbers)"
+    fig.update_layout(
+        title=(
+            "Normalized Reservoir Measurements "
+            f"({selected_area_type} – All Area Numbers)"
+        ),
+        xaxis_title="Date",
+        yaxis_title="Normalized Value (0–1)",
+        hovermode="x unified",
+        height=650
     )
 
-    ax.set_ylabel(
-        "Normalized Value (0–1)"
+
+    fig.update_yaxes(
+        range=[
+            0,
+            1
+        ]
     )
 
-    ax.legend()
 
 
+# Plot one selected variable
 else:
 
-    # Plot the selected measurement separately
-    # for every area number.
     for area_number in area_numbers:
 
         area_df = filtered_df[
@@ -297,6 +285,7 @@ else:
                 "area_number"
             ] == area_number
         ].copy()
+
 
         area_series = (
             area_df
@@ -309,57 +298,69 @@ else:
             .sort_index()
         )
 
+
         if area_series.empty:
+
             continue
 
-        ax.plot(
-            area_series.index,
-            area_series.values,
-            label=(
-                f"Area {area_number}"
-            ),
-            marker="o",
-            markersize=4,
-            linewidth=2
+
+        fig.add_trace(
+            go.Scatter(
+                x=area_series.index,
+                y=area_series.values,
+                mode="lines+markers",
+                name=(
+                    f"Area {area_number}"
+                ),
+                hovertemplate=(
+                    "%{x|%d %b %Y}"
+                    "<br>Value: %{y:.3f}"
+                    "<extra></extra>"
+                )
+            )
         )
 
 
-    ax.set_title(
-        f"{selected_column.replace('_', ' ').title()} "
-        f"({selected_area_type} – All Area Numbers)"
+    fig.update_layout(
+        title=(
+            f"{selected_column.replace('_', ' ').title()} "
+            f"({selected_area_type} – All Area Numbers)"
+        ),
+        xaxis_title="Date",
+        yaxis_title=(
+            selected_column
+            .replace(
+                "_",
+                " "
+            )
+            .title()
+        ),
+        hovermode="x unified",
+        height=650
     )
 
-    ax.set_ylabel(
-        selected_column.replace(
-            "_",
-            " "
-        ).title()
-    )
-
-    ax.legend(
-        title="Area number"
-    )
 
 
-# Common formatting.
-ax.set_xlabel(
-    "Date"
+# Common Plotly formatting
+fig.update_layout(
+    legend_title_text="Series",
+    margin={
+        "l": 30,
+        "r": 30,
+        "t": 70,
+        "b": 30
+    }
 )
 
-ax.grid(
-    alpha=0.3
+
+fig.update_xaxes(
+    rangeslider_visible=True
 )
 
-fig.autofmt_xdate()
-
-fig.tight_layout()
 
 
-# Display the Matplotlib figure.
-st.pyplot(
-    fig
-)
-
-plt.close(
-    fig
+# Display Plotly chart
+st.plotly_chart(
+    fig,
+    use_container_width=True
 )

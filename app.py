@@ -6,11 +6,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Define the application pages
+# Define pages
 home_page = st.Page(
     "home.py",
     title="Home",
     default=True
+)
+
+map_page = st.Page(
+    "pages/2_Interactive_Map.py",
+    title="Interactive Map"
 )
 
 data_page = st.Page(
@@ -35,7 +40,17 @@ seasonal_page = st.Page(
 
 weather_page = st.Page(
     "pages/5_Weather_Anomalies.py",
-    title="Weather Outliers and Anomalies"
+    title="Weather Analysis"
+)
+
+correlation_page = st.Page(
+    "pages/7_Correlation.py",
+    title="Weather & Reservoir Correlation"
+)
+
+forecast_page = st.Page(
+    "pages/8_Forecasting.py",
+    title="Reservoir Forecasting"
 )
 
 info_page = st.Page(
@@ -43,19 +58,35 @@ info_page = st.Page(
     title="Project Information"
 )
 
-# Configure sidebar navigation
+# Group pages logically
 navigation = st.navigation(
-    [
-        home_page,
-        data_page,
-        plot_page,
-        transmission_page,
-        seasonal_page,
-        weather_page,
-        info_page
-    ],
+    {
+        "Overview": [
+            home_page,
+            map_page,
+            data_page
+        ],
+
+        "Exploration": [
+            plot_page,
+            transmission_page,
+            seasonal_page
+        ],
+
+        "Data Quality & Relationships": [
+            weather_page,
+            correlation_page
+        ],
+
+        "Prediction": [
+            forecast_page
+        ],
+
+        "Project": [
+            info_page
+        ]
+    },
     position="sidebar"
 )
 
-# Run the selected page
 navigation.run()
